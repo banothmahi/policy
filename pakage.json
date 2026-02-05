@@ -1,0 +1,17 @@
+{
+  "dependencies": {
+    "react": "18.2.0",
+    "react-dom": "18.2.0",
+    "react-scripts": "5.0.1",
+    "html2canvas": "^1.4.1",
+    "lucide-react": "^0.263.1",
+    "framer-motion": "^10.16.4",
+    "@supabase/supabase-js": "^2.49.4"
+  },
+  "devDependencies": {
+    "typescript": "^4.9.5",
+    "@types/react": "^18.2.0",
+    "@types/react-dom": "^18.2.0"
+  },
+  "main": "/src/index.tsx"
+}
