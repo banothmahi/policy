@@ -1,187 +1,72 @@
+
 import React, { useState } from 'react';
 import './App.css';
+import { processFNOL } from './logic/processor';
 
-interface ClaimFields {
-  policyNumber: string | null;
-  policyholderName: string | null;
-  dateOfLoss: string | null;
-  location: string | null;
-  description: string | null;
-  estimatedDamage: string | null;
-  claimType: string | null;
-}
+const sampleFNOL = `
+*** FIRST NOTICE OF LOSS ***
 
-interface ProcessResult {
-  extractedFields: ClaimFields;
-  missingFields: string[];
-  recommendedRoute: string;
-  reasoning: string;
-}
+Policy Information:
+- Policy Number: POL-123456789
+- Policyholder Name: John Doe
+- Effective Dates: 01/01/2025 - 01/01/2026
 
-const initialClaimText = `POLICY NUMBER: 12345-ABC
-NAME OF INSURED/POLICYHOLDER: John Doe
-DATE OF LOSS/ACCIDENT (MM/DD/YYYY): 01/15/2026
-CITY, STATE, ZIP: Anytown, CA, 90210
-CLAIM TYPE: Auto
-ESTIMATE AMOUNT: $2,300
+Incident Information:
+- Date: 2026-02-01
+- Time: 14:30
+- Location: 123 Main St, Anytown, USA
+- Description: Minor fender bender in a parking lot. The other party's vehicle reversed into mine while I was stationary. Third party seemed apologetic.
 
-DESCRIPTION OF ACCIDENT/LOSS:
-The insured was rear-ended at a stoplight. He was stopped at the intersection of Main St and 1st Ave when a third party vehicle failed to stop and impacted the rear of the insured's vehicle. 
-Police were called to the scene. No injuries reported at this time.`;
+Involved Parties:
+- Claimant: John Doe
+- Contact Details: john.doe@email.com, 555-123-4567
+- Third Parties: Jane Smith, 555-987-6543
+
+Asset Details:
+- Asset Type: Vehicle
+- Asset ID: ABC-1234
+- Estimated Damage: $1,500
+
+Other Mandatory Fields:
+- Claim Type: Auto
+- Attachments: photo1.jpg, police_report.pdf
+`;
 
 const App: React.FC = () => {
-    const [claimText, setClaimText] = useState(initialClaimText);
-    const [result, setResult] = useState<ProcessResult | null>(null);
-    const [isLoading, setIsLoading] = useState(false);
+    const [fnolText, setFnolText] = useState<string>(sampleFNOL);
+    const [result, setResult] = useState<object | null>(null);
 
-    const extractFields = (text: string): ClaimFields => {
-        const fields: ClaimFields = {
-            policyNumber: null,
-            policyholderName: null,
-            dateOfLoss: null,
-            location: null,
-            description: null,
-            estimatedDamage: null,
-            claimType: null,
-        };
-    
-        const search = (pattern: RegExp): string | null => {
-            const match = text.match(pattern);
-            return match && match[1] ? match[1].trim() : null;
-        };
-    
-        fields.policyNumber = search(/POLICY NUMBER[:\s]*(.*)/i);
-        fields.policyholderName = search(/NAME OF INSURED.*?[:\s]*(.*)/i);
-        fields.dateOfLoss = search(/DATE OF LOSS.*?[:\s]*(.*)/i);
-        fields.location = search(/CITY, STATE, ZIP[:\s]*(.*)/i);
-        fields.estimatedDamage = search(/ESTIMATE AMOUNT[:\s]*(.*)/i);
-        fields.claimType = search(/CLAIM TYPE[:\s]*(.*)/i);
-
-        // Improved regex for potentially multi-line descriptions
-        const descMatch = text.match(/DESCRIPTION OF ACCIDENT.*?[:\s]*([\s\S]*?)(?=ESTIMATE AMOUNT:|CLAIM TYPE:|POLICY NUMBER:|NAME OF INSURED|----------|$)/i);
-        if (descMatch && descMatch[1]) {
-            fields.description = descMatch[1].trim();
-        }
-
-        return fields;
+    const handleProcessClick = () => {
+        const output = processFNOL(fnolText);
+        setResult(output);
     };
-
-    const findMissingFields = (fields: ClaimFields): string[] => {
-        const missing: string[] = [];
-        // We consider description non-mandatory for this check
-        const mandatoryFields: (keyof ClaimFields)[] = ['policyNumber', 'policyholderName', 'dateOfLoss', 'location', 'estimatedDamage', 'claimType'];
-        mandatoryFields.forEach(key => {
-            if (!fields[key]) {
-                missing.push(key);
-            }
-        });
-        return missing;
-    };
-
-    const routeClaim = (fields: ClaimFields, missing: string[]): { route: string; reason: string } => {
-        const description = fields.description || "";
-        const damageString = fields.estimatedDamage?.replace(/[$,]/g, '') || '';
-        const claimType = fields.claimType || "";
-        
-        let damage: number | null = null;
-        if (damageString) {
-            const parsedDamage = parseFloat(damageString);
-            if (!isNaN(parsedDamage)) {
-                damage = parsedDamage;
-            }
-        }
-        
-        if (description.toLowerCase().includes("fraud")) {
-            return { route: "Investigation Flag", reason: "Fraud keyword found" };
-        }
-    
-        if (missing.length > 0) {
-            const prettyMissing = missing.map(f => f.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase()));
-            return { route: "Manual Review", reason: `Missing mandatory fields: ${prettyMissing.join(', ')}` };
-        }
-    
-        if (claimType.toLowerCase().includes("injury")) {
-            return { route: "Specialist Queue", reason: "Injury claim" };
-        }
-    
-        if (damage !== null && damage < 25000) {
-            return { route: "Fast-track", reason: "Low damage estimate (< $25,000)" };
-        }
-    
-        return { route: "Standard Processing", reason: "Claim meets standard criteria" };
-    };
-
-    const handleProcessClaim = () => {
-        setIsLoading(true);
-        setResult(null); 
-        // Simulate processing time for a better user experience
-        setTimeout(() => {
-            const extracted = extractFields(claimText);
-            const missing = findMissingFields(extracted);
-            const { route, reason } = routeClaim(extracted, missing);
-    
-            setResult({
-                extractedFields: extracted,
-                missingFields: missing,
-                recommendedRoute: route,
-                reasoning: reason,
-            });
-            setIsLoading(false);
-        }, 500);
-    };
-
-    const formatFieldName = (key: string) => {
-      return key.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
-    }
 
     return (
-      <div className="app-container">
-        <header className="app-header">
-          <h1>Claim Processing & Routing</h1>
-          <p>This tool analyzes claim text to extract fields and recommend a processing route, based on the logic from your Python script.</p>
-          <p className="disclaimer">Since I can't read PDF files directly in this environment, please paste the text from your claim document below.</p>
-        </header>
-
-        <main className="app-main">
-          <div className="input-section">
-            <h2>Claim Document Text</h2>
-            <textarea
-              value={claimText}
-              onChange={(e) => setClaimText(e.target.value)}
-              placeholder="Paste your FNOL document text here..."
-              className="claim-textarea"
-            />
-            <button onClick={handleProcessClaim} disabled={isLoading || !claimText}>
-              {isLoading ? 'Processing...' : 'Process Claim'}
-            </button>
-          </div>
-          
-          {isLoading && <div className="output-section"><h2>Processing...</h2></div>}
-
-          {result && (
-            <div className="output-section">
-              <h2>Processing Results</h2>
-              <div className="result-card route-card">
-                <h3>Recommended Route</h3>
-                <p className="route">{result.recommendedRoute}</p>
-                <p className="reasoning">{result.reasoning}</p>
-              </div>
-              
-              <div className="result-card fields-card">
-                <h3>Extracted Fields</h3>
-                <ul>
-                  {Object.entries(result.extractedFields).map(([key, value]) => (
-                    <li key={key} className={!value ? 'missing-field' : ''}>
-                      <strong>{formatFieldName(key)}:</strong> 
-                      <span>{value || 'Not Found'}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </div>
-          )}
-        </main>
-      </div>
+        <div className="app-container">
+            <header>
+                <h1>Autonomous Claims Processor</h1>
+                <p>Paste an FNOL document below to extract fields and determine the claim route.</p>
+            </header>
+            <main>
+                <div className="input-section">
+                    <h2>FNOL Document Input</h2>
+                    <textarea
+                        value={fnolText}
+                        onChange={(e) => setFnolText(e.target.value)}
+                        placeholder="Paste FNOL text here..."
+                    />
+                    <button className="process-button" onClick={handleProcessClick}>
+                        Process Claim
+                    </button>
+                </div>
+                <div className="output-section">
+                    <h2>Processing Result (JSON)</h2>
+                    <pre>
+                        {result ? JSON.stringify(result, null, 2) : 'Awaiting processing...'}
+                    </pre>
+                </div>
+            </main>
+        </div>
     );
 };
 
